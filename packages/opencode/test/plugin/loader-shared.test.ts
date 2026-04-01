@@ -258,18 +258,18 @@ describe("plugin.loader.shared", () => {
       },
     })
 
-    const install = spyOn(Npm, "add").mockImplementation(async (pkg: string) => {
-      if (pkg === "acme-plugin@latest") return tmp.extra.acme
+    const add = spyOn(Npm, "add").mockImplementation(async (pkg) => {
+      if (pkg === "acme-plugin") return tmp.extra.acme
       return tmp.extra.scope
     })
 
     try {
       await load(tmp.path)
 
-      expect(install.mock.calls).toContainEqual(["acme-plugin@latest"])
-      expect(install.mock.calls).toContainEqual(["scope-plugin@2.3.4"])
+      expect(add.mock.calls).toContainEqual(["acme-plugin"])
+      expect(add.mock.calls).toContainEqual(["scope-plugin@2.3.4"])
     } finally {
-      install.mockRestore()
+      add.mockRestore()
     }
   })
 
@@ -578,9 +578,9 @@ describe("plugin.loader.shared", () => {
       await load(tmp.path)
 
       const pkgs = install.mock.calls.map((call) => call[0])
-      expect(pkgs).toContain("regular-plugin")
-      expect(pkgs).not.toContain("opencode-openai-codex-auth")
-      expect(pkgs).not.toContain("opencode-copilot-auth")
+      expect(pkgs).toContain("regular-plugin@1.0.0")
+      expect(pkgs).not.toContain("opencode-openai-codex-auth@1.0.0")
+      expect(pkgs).not.toContain("opencode-copilot-auth@1.0.0")
     } finally {
       install.mockRestore()
     }

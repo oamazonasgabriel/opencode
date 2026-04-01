@@ -32,13 +32,13 @@ import { Account } from "@/account"
 import { isRecord } from "@/util/record"
 import { ConfigPaths } from "./paths"
 import { Filesystem } from "@/util/filesystem"
-import { Npm } from "@/npm"
 import { AppFileSystem } from "@/filesystem"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRuntime } from "@/effect/run-service"
 import { Duration, Effect, Layer, Option, ServiceMap } from "effect"
 import { Flock } from "@/util/flock"
 import { isPathPluginSpec, parsePluginSpecifier, resolvePathPluginTarget } from "@/plugin/shared"
+import { Npm } from "@/npm"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
@@ -87,8 +87,7 @@ export namespace Config {
   }
 
   export async function installDependencies(dir: string, input?: InstallInput) {
-    if (!(await needsInstall(dir))) return
-
+    if (!(await isWritable(dir))) return
     await using _ = await Flock.acquire(`config-install:${Filesystem.resolve(dir)}`, {
       signal: input?.signal,
       onWait: (tick) =>
@@ -99,13 +98,10 @@ export namespace Config {
           waited: tick.waited,
         }),
     })
-
     input?.signal?.throwIfAborted()
-    if (!(await needsInstall(dir))) return
 
     const pkg = path.join(dir, "package.json")
     const target = Installation.isLocal() ? "*" : Installation.VERSION
-
     const json = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => ({
       dependencies: {},
     }))
@@ -123,7 +119,6 @@ export namespace Config {
         ["node_modules", "package.json", "package-lock.json", "bun.lock", ".gitignore"].join("\n"),
       )
     }
-
     // npm lock writes can race on Windows when installs run in parallel across dirs.
     // Serialize installs globally on win32, but keep parallel installs on other platforms.
     await using __ =
@@ -185,7 +180,6 @@ export namespace Config {
     if (depVersion === targetVersion) return false
     return true
   }
-
   function rel(item: string, patterns: string[]) {
     const normalizedItem = item.replaceAll("\\", "/")
     for (const pattern of patterns) {
@@ -1330,8 +1324,7 @@ export namespace Config {
             }
 
             const dep = iife(async () => {
-              const stale = await needsInstall(dir)
-              if (stale) await installDependencies(dir)
+              await installDependencies(dir)
             })
             void dep.catch((err) => {
               log.warn("background dependency install failed", { dir, error: err })
